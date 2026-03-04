@@ -9,6 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { VoiceButton, type VoiceButtonState } from "@/components/ui/voice-button"
 
+const RECONNECT_BASE_DELAY_MS = 900
+const RECONNECT_MAX_DELAY_MS = 12_000
+const USER_ACTIVITY_PING_MS = 25_000
+
 export interface ConversationBarProps {
   /**
    * ElevenLabs Agent ID to connect to (public agents can connect directly).
@@ -147,11 +151,50 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
     const didAutoStartRef = React.useRef(false)
     const pendingMessagesRef = React.useRef<string[]>([])
     const recognitionRef = React.useRef<BrowserSpeechRecognition | null>(null)
+    const reconnectTimeoutRef = React.useRef<number | null>(null)
+    const reconnectAttemptRef = React.useRef(0)
+    const manualStopRef = React.useRef(false)
+    const shouldMaintainSessionRef = React.useRef(false)
+    const startSessionRef = React.useRef<() => Promise<void>>(async () => {})
+
+    const clearReconnectTimer = React.useCallback(() => {
+      if (reconnectTimeoutRef.current === null) return
+      window.clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
+    }, [])
+
+    const scheduleReconnect = React.useCallback(() => {
+      if (manualStopRef.current || !shouldMaintainSessionRef.current) return
+      if (reconnectTimeoutRef.current !== null) return
+
+      const delay = Math.min(
+        RECONNECT_MAX_DELAY_MS,
+        RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttemptRef.current
+      )
+      reconnectAttemptRef.current += 1
+
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        reconnectTimeoutRef.current = null
+        if (manualStopRef.current || !shouldMaintainSessionRef.current) return
+        void startSessionRef.current()
+      }, delay)
+    }, [])
 
     const conversation = useConversation({
       textOnly,
-      onConnect: ({ conversationId }) => onConnect?.(conversationId),
-      onDisconnect: () => onDisconnect?.(),
+      onConnect: ({ conversationId }) => {
+        clearReconnectTimer()
+        reconnectAttemptRef.current = 0
+        onConnect?.(conversationId)
+      },
+      onDisconnect: (details) => {
+        onDisconnect?.()
+
+        if (manualStopRef.current || !shouldMaintainSessionRef.current) return
+        if (details.reason === "user" || details.reason === "agent") return
+
+        scheduleReconnect()
+      },
       onError: (err) => onError?.(normalizeError(err)),
       onMessage: (evt: unknown) => {
         if (!isRecord(evt)) return
@@ -185,12 +228,17 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
 
     const startSession = React.useCallback(async () => {
       if (!agentId) return
+      manualStopRef.current = false
+      shouldMaintainSessionRef.current = true
+      clearReconnectTimer()
+
       if (conversation.status === "connected" || conversation.status === "connecting") {
         return
       }
 
       try {
         const trimmedBranchId = branchId?.trim()
+
         if (connectionType === "websocket" && trimmedBranchId) {
           await conversation.startSession({
             signedUrl: buildWebSocketConversationUrl(agentId, trimmedBranchId),
@@ -207,10 +255,29 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
         })
       } catch (err) {
         onError?.(normalizeError(err))
+        scheduleReconnect()
       }
-    }, [agentId, branchId, connectionType, conversation, onError, userId])
+    }, [
+      agentId,
+      branchId,
+      clearReconnectTimer,
+      connectionType,
+      conversation,
+      onError,
+      scheduleReconnect,
+      userId,
+    ])
+
+    React.useEffect(() => {
+      startSessionRef.current = startSession
+    }, [startSession])
 
     const endSession = React.useCallback(async () => {
+      manualStopRef.current = true
+      shouldMaintainSessionRef.current = false
+      clearReconnectTimer()
+      reconnectAttemptRef.current = 0
+
       if (conversation.status === "disconnected" || conversation.status === "disconnecting") {
         return
       }
@@ -220,13 +287,22 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
       } catch (err) {
         onError?.(normalizeError(err))
       }
-    }, [conversation, onError])
+    }, [clearReconnectTimer, conversation, onError])
+
+    React.useEffect(() => {
+      return () => {
+        manualStopRef.current = true
+        shouldMaintainSessionRef.current = false
+        clearReconnectTimer()
+      }
+    }, [clearReconnectTimer])
 
     React.useEffect(() => {
       if (!autoStart) return
       if (!agentId) return
       if (didAutoStartRef.current) return
       didAutoStartRef.current = true
+      shouldMaintainSessionRef.current = true
       void startSession()
     }, [agentId, autoStart, startSession])
 
@@ -244,6 +320,68 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
     React.useEffect(() => {
       flushPending()
     }, [flushPending, conversation.status])
+
+    React.useEffect(() => {
+      if (typeof window === "undefined") return
+
+      const tryRestoreConnection = () => {
+        if (!shouldMaintainSessionRef.current || manualStopRef.current) return
+        if (conversation.status === "disconnected") {
+          void startSession()
+          return
+        }
+        if (conversation.status === "connected") {
+          try {
+            conversation.sendUserActivity()
+          } catch {
+            /* noop */
+          }
+        }
+      }
+
+      const handleVisibility = () => {
+        if (document.visibilityState === "visible") {
+          tryRestoreConnection()
+        }
+      }
+
+      const handlePageShow = () => {
+        tryRestoreConnection()
+      }
+
+      const handleOnline = () => {
+        tryRestoreConnection()
+      }
+
+      document.addEventListener("visibilitychange", handleVisibility)
+      window.addEventListener("pageshow", handlePageShow)
+      window.addEventListener("online", handleOnline)
+
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisibility)
+        window.removeEventListener("pageshow", handlePageShow)
+        window.removeEventListener("online", handleOnline)
+      }
+    }, [conversation, startSession])
+
+    React.useEffect(() => {
+      if (conversation.status !== "connected") return
+
+      const interval = window.setInterval(() => {
+        if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+          return
+        }
+        try {
+          conversation.sendUserActivity()
+        } catch {
+          /* noop */
+        }
+      }, USER_ACTIVITY_PING_MS)
+
+      return () => {
+        window.clearInterval(interval)
+      }
+    }, [conversation, conversation.status])
 
     const handleSendText = React.useCallback(() => {
       const messageToSend = textInput.trim()

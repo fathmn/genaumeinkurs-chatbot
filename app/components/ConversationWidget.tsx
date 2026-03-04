@@ -227,28 +227,13 @@ export function ConversationWidget() {
     const { id, target } = streaming
     const total = target.length
 
-    // Slightly faster, "human" typing: small chunks + punctuation pauses.
-    // Still accelerates for very long messages so we don't block the chat for ages.
-    const step =
-      total > 1_200 ? 6 : total > 800 ? 4 : total > 420 ? 3 : total > 260 ? 2 : 1
-    // Keep short first replies readable, but don't drag the interaction.
-    const baseMsPerChar =
-      total <= 12
-        ? 70
-        : total <= 40
-          ? 55
-          : total <= 120
-            ? 42
-            : total <= 260
-              ? 36
-              : total <= 420
-                ? 30
-                : total <= 800
-                  ? 22
-                  : total <= 1_200
-                    ? 18
-                    : 16
-    const startDelayMs = 220
+    // Make the "first message typing" effect noticeably faster:
+    // cap total animation duration and increase chunk sizes for long replies.
+    const desiredDurationMs = Math.min(1_250, Math.max(240, 160 + total * 1.2))
+    const baseTickMs = 24
+    const ticks = Math.max(1, Math.ceil(desiredDurationMs / baseTickMs))
+    const step = Math.max(1, Math.ceil(total / ticks))
+    const startDelayMs = 70
 
     let idx = 0
     let timeoutId: number | null = null
@@ -279,22 +264,24 @@ export function ConversationWidget() {
 
       const lastChar = slice.at(-1) ?? ""
       const punctuationPause =
-        lastChar === "\n"
-          ? 120
-          : ".!?".includes(lastChar)
-            ? 240
-            : ",;:".includes(lastChar)
-              ? 120
-              : 0
+        step <= 3
+          ? lastChar === "\n"
+            ? 24
+            : ".!?".includes(lastChar)
+              ? 48
+              : ",;:".includes(lastChar)
+                ? 28
+                : 0
+          : 0
 
-      const nextDelay = baseMsPerChar * step + punctuationPause
+      const nextDelay = baseTickMs + punctuationPause
       timeoutId = window.setTimeout(tick, nextDelay)
     }
 
     timeoutId = window.setTimeout(tick, startDelayMs)
 
     return () => {
-      if (timeoutId) window.clearTimeout(timeoutId)
+      if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
   }, [addMessage, streaming])
 
