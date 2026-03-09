@@ -40,6 +40,13 @@ type UiMessage = {
   isStreaming?: boolean
 }
 
+function splitAssistantMessage(text: string): string[] {
+  return text
+    .split("\n\n")
+    .map((part) => part.trim())
+    .filter(Boolean)
+}
+
 function useStableUserId() {
   const key = "elevenlabs_user_id"
 
@@ -373,6 +380,10 @@ export function ConversationWidget() {
                         const isAssistant = m.from === "assistant"
                         const isFirstAssistant =
                           isAssistant && m.id === firstAssistantMessageId
+                        const assistantParts =
+                          isAssistant && !m.isStreaming
+                            ? splitAssistantMessage(m.text)
+                            : [m.text]
 
                         return (
                           <Message key={m.id} from={m.from}>
@@ -408,30 +419,37 @@ export function ConversationWidget() {
                                       }
                                 }
                                 style={{ transformOrigin: "0% 100%" }}
-                                className="flex flex-1 min-w-0 will-change-transform"
+                                className="flex min-w-0 flex-1 will-change-transform"
                               >
-                                <MessageContent className="max-w-[96%] sm:max-w-[92%]">
+                                <div className="flex min-w-0 flex-1 flex-col gap-2">
                                   {m.isStreaming && m.text.length === 0 ? (
-                                    <div className="py-0.5">
-                                      <ShimmeringText
-                                        text="Agent tippt…"
-                                        duration={1.4}
-                                        repeatDelay={0.15}
-                                        className="text-sm"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <Response>{m.text}</Response>
-                                      {m.isStreaming ? (
-                                        <span
-                                          aria-hidden="true"
-                                          className="ml-1 inline-block h-4 w-1 translate-y-[2px] rounded-full bg-foreground/35 animate-pulse"
+                                    <MessageContent className="max-w-[96%] sm:max-w-[92%]">
+                                      <div className="py-0.5">
+                                        <ShimmeringText
+                                          text="Agent tippt…"
+                                          duration={1.4}
+                                          repeatDelay={0.15}
+                                          className="text-sm"
                                         />
-                                      ) : null}
-                                    </>
+                                      </div>
+                                    </MessageContent>
+                                  ) : (
+                                    assistantParts.map((part, index) => (
+                                      <MessageContent
+                                        key={`${m.id}-${index}`}
+                                        className="max-w-[96%] sm:max-w-[92%]"
+                                      >
+                                        <Response>{part}</Response>
+                                        {m.isStreaming && index === assistantParts.length - 1 ? (
+                                          <span
+                                            aria-hidden="true"
+                                            className="ml-1 inline-block h-4 w-1 translate-y-[2px] rounded-full bg-foreground/35 animate-pulse"
+                                          />
+                                        ) : null}
+                                      </MessageContent>
+                                    ))
                                   )}
-                                </MessageContent>
+                                </div>
                               </motion.div>
                             ) : (
                               <div className="flex flex-1 min-w-0 justify-end">
