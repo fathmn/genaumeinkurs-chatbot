@@ -237,6 +237,9 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
         if (manualStopRef.current || !shouldMaintainSessionRef.current) return
         if (details.reason === "user") return
         if (details.reason === "agent" && !isAgentTimeoutDisconnect(details)) {
+          // Agent ended the conversation normally — stop maintaining the session
+          // so that visibility/pageshow/online events don't start a new one.
+          shouldMaintainSessionRef.current = false
           return
         }
 
