@@ -45,14 +45,6 @@ export default function Home() {
                 <li>Bis zu 100&nbsp;% Förderung über den Bildungsgutschein</li>
               </ul>
 
-              <div className="mt-6 hidden flex-col gap-3 sm:flex-row sm:items-center lg:flex">
-                <a
-                  href="#chat"
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-foreground px-5 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
-                >
-                  Jetzt kostenlos beraten lassen
-                </a>
-              </div>
             </div>
 
             {/* Chat widget */}
