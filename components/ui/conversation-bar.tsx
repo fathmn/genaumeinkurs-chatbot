@@ -631,7 +631,7 @@ export const ConversationBar = React.forwardRef<HTMLDivElement, ConversationBarP
           placeholder={placeholder}
           rows={1}
           className={cn(
-            "!min-h-11 max-h-40 flex-1 resize-none rounded-2xl border-border/60 bg-background/40 px-4 py-2.5 text-sm shadow-none backdrop-blur-md [field-sizing:normal]",
+            "!min-h-11 max-h-40 flex-1 resize-none rounded-2xl border-border/60 bg-background/40 px-4 py-2.5 text-[13px] shadow-none backdrop-blur-md [field-sizing:normal] sm:text-sm",
             "focus-visible:ring-0"
           )}
           disabled={isDisconnecting}
