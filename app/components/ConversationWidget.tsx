@@ -104,6 +104,15 @@ export function ConversationWidget() {
     : envBranchId || DEFAULT_BRANCH_ID
 
   const mouseContainerRef = useRef<HTMLDivElement | null>(null)
+  const [glassRadius, setGlassRadius] = useState(32)
+
+  useEffect(() => {
+    const mql = window.matchMedia("(max-width: 639px)")
+    setGlassRadius(mql.matches ? 20 : 32)
+    const handler = (e: MediaQueryListEvent) => setGlassRadius(e.matches ? 20 : 32)
+    mql.addEventListener("change", handler)
+    return () => mql.removeEventListener("change", handler)
+  }, [])
 
   const [status, setStatus] = useState<Status>("disconnected")
   const [messages, setMessages] = useState<UiMessage[]>([])
@@ -310,7 +319,7 @@ export function ConversationWidget() {
   return (
     <div
       ref={mouseContainerRef}
-      className="relative isolate h-[74dvh] min-h-[500px] w-full overflow-hidden rounded-[32px] shadow-[0_32px_90px_rgba(0,0,0,0.16)] sm:h-[70dvh] sm:min-h-[520px] lg:h-full lg:min-h-[600px]"
+      className="relative isolate h-[74dvh] min-h-[500px] w-full overflow-hidden rounded-[20px] shadow-[0_32px_90px_rgba(0,0,0,0.16)] sm:rounded-[32px] sm:h-[70dvh] sm:min-h-[520px] lg:h-full lg:min-h-[600px]"
     >
       <LiquidGlass
         mouseContainer={mouseContainerRef}
@@ -320,7 +329,7 @@ export function ConversationWidget() {
         saturation={155}
         aberrationIntensity={1.6}
         elasticity={0}
-        cornerRadius={32}
+        cornerRadius={glassRadius}
         overLight={false}
         padding="0px"
         style={{
@@ -387,7 +396,7 @@ export function ConversationWidget() {
                           <Message key={m.id} from={m.from}>
                             <MessageAvatar
                               name={m.from === "user" ? "DU" : "AI"}
-                              src={m.from === "user" ? undefined : "/agent.jpg"}
+                              src={m.from === "user" ? undefined : "/agent.webp"}
                             />
                             {isAssistant ? (
                               <motion.div

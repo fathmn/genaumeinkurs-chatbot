@@ -19,12 +19,12 @@ export default function Home() {
             <div className="rounded-[32px] border bg-background/20 p-5 shadow-sm backdrop-blur-md lg:row-start-1 lg:col-start-1">
               <h1
                 id="hero"
-                className="text-balance font-[var(--font-nohemi)] text-4xl font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-[48px]"
+                className="text-balance font-[var(--font-nohemi)] text-[28px] font-bold leading-[1.05] tracking-tight sm:text-5xl lg:text-[48px]"
               >
                 Du bist nicht sicher, welche IT-Weiterbildung zu dir passt?<br className="hidden lg:block" /> Sprich jetzt mit unserem KI-Berater&nbsp;&#x2B07;
               </h1>
               <Image
-                src="/hero-it.png"
+                src="/hero-it.webp"
                 alt="IT Weiterbildung – 100% Kostenübernahme"
                 width={1200}
                 height={628}
@@ -59,7 +59,7 @@ export default function Home() {
             {/* Subtitle + CTA + Stats — below chat on mobile only */}
             <div className="rounded-[32px] border bg-background/20 p-5 shadow-sm backdrop-blur-md lg:hidden">
               <Image
-                src="/hero-it.png"
+                src="/hero-it.webp"
                 alt="IT Weiterbildung – 100% Kostenübernahme"
                 width={1200}
                 height={628}
