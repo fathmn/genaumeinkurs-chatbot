@@ -19,7 +19,7 @@ export default function Home() {
             <div className="rounded-[32px] border bg-background/20 p-5 shadow-sm backdrop-blur-md lg:row-start-1 lg:col-start-1">
               <h1
                 id="hero"
-                className="text-balance font-[var(--font-nohemi)] text-[24px] font-bold leading-[1.05] tracking-tight sm:text-[36px] lg:text-[48px]"
+                className="text-balance font-[var(--font-nohemi)] text-[24px] font-bold leading-[1.05] tracking-tight sm:text-[36px]"
               >
                 Du bist nicht sicher, welche IT-Weiterbildung zu dir passt?<br className="hidden lg:block" /> Sprich jetzt mit unserem KI-Berater&nbsp;&#x2B07;
               </h1>

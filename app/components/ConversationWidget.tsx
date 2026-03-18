@@ -319,7 +319,7 @@ export function ConversationWidget() {
   return (
     <div
       ref={mouseContainerRef}
-      className="relative isolate h-[calc(100svh-100px)] min-h-[500px] w-full overflow-hidden rounded-[20px] bg-white/30 shadow-[0_32px_90px_rgba(0,0,0,0.16)] [clip-path:inset(0_round_20px)] sm:rounded-[32px] sm:[clip-path:inset(0_round_32px)] sm:h-[70svh] sm:min-h-[520px] lg:h-full lg:min-h-[600px]"
+      className="relative isolate h-[calc(100svh-100px)] min-h-[500px] w-full overflow-hidden rounded-[20px] bg-white/30 shadow-[0_32px_90px_rgba(0,0,0,0.16)] [clip-path:inset(0_round_20px)] sm:rounded-[32px] sm:bg-transparent sm:[clip-path:none] sm:h-[70svh] sm:min-h-[520px] lg:h-full lg:min-h-[600px]"
     >
       <LiquidGlass
         mouseContainer={mouseContainerRef}
@@ -430,7 +430,7 @@ export function ConversationWidget() {
                               >
                                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                                   {m.isStreaming && m.text.length === 0 ? (
-                                    <MessageContent className="max-w-full sm:max-w-[80%]">
+                                    <MessageContent className="max-w-full sm:max-w-[92%]">
                                       <div className="py-0.5">
                                         <ShimmeringText
                                           text="Agent tippt…"
@@ -444,7 +444,7 @@ export function ConversationWidget() {
                                     assistantParts.map((part, index) => (
                                       <MessageContent
                                         key={`${m.id}-${index}`}
-                                        className="max-w-full sm:max-w-[80%]"
+                                        className="max-w-full sm:max-w-[92%]"
                                       >
                                         <Response>{part}</Response>
                                         {m.isStreaming && index === assistantParts.length - 1 ? (
