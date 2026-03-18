@@ -430,7 +430,7 @@ export function ConversationWidget() {
                               >
                                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                                   {m.isStreaming && m.text.length === 0 ? (
-                                    <MessageContent className="max-w-[96%] sm:max-w-[92%]">
+                                    <MessageContent className="max-w-full sm:max-w-[92%]">
                                       <div className="py-0.5">
                                         <ShimmeringText
                                           text="Agent tippt…"
@@ -444,7 +444,7 @@ export function ConversationWidget() {
                                     assistantParts.map((part, index) => (
                                       <MessageContent
                                         key={`${m.id}-${index}`}
-                                        className="max-w-[96%] sm:max-w-[92%]"
+                                        className="max-w-full sm:max-w-[92%]"
                                       >
                                         <Response>{part}</Response>
                                         {m.isStreaming && index === assistantParts.length - 1 ? (
