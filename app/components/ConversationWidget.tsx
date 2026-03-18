@@ -319,7 +319,7 @@ export function ConversationWidget() {
   return (
     <div
       ref={mouseContainerRef}
-      className="relative isolate h-[calc(100svh-100px)] min-h-[500px] w-full overflow-hidden rounded-[20px] bg-white/30 shadow-[0_32px_90px_rgba(0,0,0,0.16)] sm:rounded-[32px] sm:h-[70svh] sm:min-h-[520px] lg:h-full lg:min-h-[600px]"
+      className="relative isolate h-[calc(100svh-100px)] min-h-[500px] w-full overflow-hidden rounded-[20px] bg-white/30 shadow-[0_32px_90px_rgba(0,0,0,0.16)] [clip-path:inset(0_round_20px)] sm:rounded-[32px] sm:[clip-path:inset(0_round_32px)] sm:h-[70svh] sm:min-h-[520px] lg:h-full lg:min-h-[600px]"
     >
       <LiquidGlass
         mouseContainer={mouseContainerRef}
