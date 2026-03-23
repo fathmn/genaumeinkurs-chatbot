@@ -197,6 +197,7 @@ export const SecureConversationBar = React.forwardRef<
     const manualStopRef = React.useRef(false)
     const shouldMaintainSessionRef = React.useRef(false)
     const startSessionRef = React.useRef<() => Promise<void>>(async () => {})
+    const sessionStartPromiseRef = React.useRef<Promise<void> | null>(null)
     const signedUrlAbortRef = React.useRef<AbortController | null>(null)
 
     const clearReconnectTimer = React.useCallback(() => {
@@ -266,6 +267,11 @@ export const SecureConversationBar = React.forwardRef<
         }
       },
     })
+    const conversationRef = React.useRef(conversation)
+    const conversationStatusRef = React.useRef<Status>(conversation.status)
+
+    conversationRef.current = conversation
+    conversationStatusRef.current = conversation.status
 
     React.useEffect(() => {
       onStatusChange?.(conversation.status)
@@ -276,48 +282,63 @@ export const SecureConversationBar = React.forwardRef<
       shouldMaintainSessionRef.current = true
       clearReconnectTimer()
 
-      if (conversation.status === "connected" || conversation.status === "connecting") {
+      const status = conversationStatusRef.current
+      if (status === "connected" || status === "connecting") {
         return
       }
 
-      signedUrlAbortRef.current?.abort()
-      const controller = new AbortController()
-      signedUrlAbortRef.current = controller
+      if (sessionStartPromiseRef.current) {
+        return sessionStartPromiseRef.current
+      }
 
-      try {
-        const sessionConfig = await fetchSessionConfig(controller.signal)
-        if (controller.signal.aborted) return
+      const startPromise = (async () => {
+        signedUrlAbortRef.current?.abort()
+        const controller = new AbortController()
+        signedUrlAbortRef.current = controller
 
-        if (sessionConfig.sessionType === "public") {
-          await conversation.startSession({
-            agentId: sessionConfig.agentId,
+        try {
+          const sessionConfig = await fetchSessionConfig(controller.signal)
+          if (controller.signal.aborted) return
+
+          const activeConversation = conversationRef.current
+          if (sessionConfig.sessionType === "public") {
+            await activeConversation.startSession({
+              agentId: sessionConfig.agentId,
+              connectionType: "websocket",
+              userId,
+            })
+            return
+          }
+
+          await activeConversation.startSession({
+            signedUrl: sessionConfig.signedUrl,
             connectionType: "websocket",
             userId,
           })
-          return
-        }
+        } catch (err) {
+          if (controller.signal.aborted) return
 
-        await conversation.startSession({
-          signedUrl: sessionConfig.signedUrl,
-          connectionType: "websocket",
-          userId,
-        })
-      } catch (err) {
-        if (controller.signal.aborted) return
+          const error = normalizeError(err)
+          onError?.(error)
 
-        const error = normalizeError(err)
-        onError?.(error)
+          const statusCode = isChatSessionError(err) ? err.status : undefined
+          if (statusCode === undefined || statusCode === 429 || statusCode >= 500) {
+            scheduleReconnect()
+          }
+        } finally {
+          if (signedUrlAbortRef.current === controller) {
+            signedUrlAbortRef.current = null
+          }
+        }
+      })().finally(() => {
+        if (sessionStartPromiseRef.current === startPromise) {
+          sessionStartPromiseRef.current = null
+        }
+      })
 
-        const status = isChatSessionError(err) ? err.status : undefined
-        if (status === undefined || status === 429 || status >= 500) {
-          scheduleReconnect()
-        }
-      } finally {
-        if (signedUrlAbortRef.current === controller) {
-          signedUrlAbortRef.current = null
-        }
-      }
-    }, [clearReconnectTimer, conversation, onError, scheduleReconnect, userId])
+      sessionStartPromiseRef.current = startPromise
+      return startPromise
+    }, [clearReconnectTimer, onError, scheduleReconnect, userId])
 
     React.useEffect(() => {
       startSessionRef.current = startSession
@@ -332,16 +353,17 @@ export const SecureConversationBar = React.forwardRef<
     }, [autoStart, startSession])
 
     const flushPending = React.useCallback(() => {
-      if (conversation.status !== "connected") return
+      if (conversationStatusRef.current !== "connected") return
       if (pendingMessagesRef.current.length === 0) return
 
       const pending = pendingMessagesRef.current
       pendingMessagesRef.current = []
+      const activeConversation = conversationRef.current
 
       for (const message of pending) {
-        conversation.sendUserMessage(message)
+        activeConversation.sendUserMessage(message)
       }
-    }, [conversation])
+    }, [])
 
     React.useEffect(() => {
       flushPending()
@@ -352,15 +374,17 @@ export const SecureConversationBar = React.forwardRef<
 
       const tryRestoreConnection = () => {
         if (!shouldMaintainSessionRef.current || manualStopRef.current) return
+        const status = conversationStatusRef.current
+        const activeConversation = conversationRef.current
 
-        if (conversation.status === "disconnected") {
+        if (status === "disconnected") {
           void startSession()
           return
         }
 
-        if (conversation.status === "connected") {
+        if (status === "connected") {
           try {
-            conversation.sendUserActivity()
+            activeConversation.sendUserActivity()
           } catch {
             /* noop */
           }
@@ -382,7 +406,7 @@ export const SecureConversationBar = React.forwardRef<
         window.removeEventListener("pageshow", tryRestoreConnection)
         window.removeEventListener("online", tryRestoreConnection)
       }
-    }, [conversation, startSession])
+    }, [startSession])
 
     React.useEffect(() => {
       if (conversation.status !== "connected") return
@@ -391,7 +415,7 @@ export const SecureConversationBar = React.forwardRef<
         if (document.visibilityState !== "visible") return
 
         try {
-          conversation.sendUserActivity()
+          conversationRef.current.sendUserActivity()
         } catch {
           /* noop */
         }
@@ -400,25 +424,17 @@ export const SecureConversationBar = React.forwardRef<
       return () => {
         window.clearInterval(interval)
       }
-    }, [conversation, conversation.status])
+    }, [conversation.status])
 
     React.useEffect(() => {
       return () => {
         manualStopRef.current = true
         shouldMaintainSessionRef.current = false
         clearReconnectTimer()
+        sessionStartPromiseRef.current = null
         signedUrlAbortRef.current?.abort()
-
-        if (
-          conversation.status !== "disconnected" &&
-          conversation.status !== "disconnecting"
-        ) {
-          void conversation.endSession().catch(() => {
-            /* noop */
-          })
-        }
       }
-    }, [clearReconnectTimer, conversation])
+    }, [clearReconnectTimer])
 
     const handleSendText = React.useCallback(() => {
       const messageToSend = textInput.trim()
@@ -427,14 +443,14 @@ export const SecureConversationBar = React.forwardRef<
       setTextInput("")
       onSendMessage?.(messageToSend)
 
-      if (conversation.status === "connected") {
-        conversation.sendUserMessage(messageToSend)
+      if (conversationStatusRef.current === "connected") {
+        conversationRef.current.sendUserMessage(messageToSend)
         return
       }
 
       pendingMessagesRef.current.push(messageToSend)
       void startSession()
-    }, [conversation, onSendMessage, startSession, textInput])
+    }, [onSendMessage, startSession, textInput])
 
     const handleKeyDown = React.useCallback(
       (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
