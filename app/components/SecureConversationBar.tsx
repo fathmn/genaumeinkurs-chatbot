@@ -156,6 +156,15 @@ async function fetchSessionConfig(signal: AbortSignal): Promise<ChatSessionConfi
   )
 }
 
+function buildPublicConversationUrl(agentId: string, branchId?: string): string {
+  const url = new URL("wss://api.elevenlabs.io/v1/convai/conversation")
+  url.searchParams.set("agent_id", agentId)
+  if (branchId) {
+    url.searchParams.set("branch_id", branchId)
+  }
+  return url.toString()
+}
+
 export interface SecureConversationBarProps {
   userId?: string
   autoStart?: boolean
@@ -303,7 +312,10 @@ export const SecureConversationBar = React.forwardRef<
           const activeConversation = conversationRef.current
           if (sessionConfig.sessionType === "public") {
             await activeConversation.startSession({
-              agentId: sessionConfig.agentId,
+              signedUrl: buildPublicConversationUrl(
+                sessionConfig.agentId,
+                sessionConfig.branchId
+              ),
               connectionType: "websocket",
               userId,
             })
