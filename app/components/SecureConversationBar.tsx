@@ -39,6 +39,17 @@ const USER_ACTIVITY_PING_MS = parseIntervalMs(
   MAX_USER_ACTIVITY_PING_MS
 )
 
+type ChatSessionConfig =
+  | {
+      sessionType: "signed"
+      signedUrl: string
+    }
+  | {
+      sessionType: "public"
+      agentId: string
+      branchId?: string
+    }
+
 class ChatSessionError extends Error {
   status: number
 
@@ -82,7 +93,14 @@ function isAgentTimeoutDisconnect(details: DisconnectionDetails): boolean {
   )
 }
 
-async function fetchSignedUrl(signal: AbortSignal) {
+function buildWebSocketConversationUrl(agentId: string, branchId: string): string {
+  const url = new URL("wss://api.elevenlabs.io/v1/convai/conversation")
+  url.searchParams.set("agent_id", agentId)
+  url.searchParams.set("branch_id", branchId)
+  return url.toString()
+}
+
+async function fetchSessionConfig(signal: AbortSignal): Promise<ChatSessionConfig> {
   const response = await fetch("/api/get-signed-url", {
     method: "POST",
     headers: {
@@ -95,8 +113,11 @@ async function fetchSignedUrl(signal: AbortSignal) {
   })
 
   const data = (await response.json().catch(() => ({}))) as {
+    sessionType?: string
     error?: string
     signedUrl?: string
+    agentId?: string
+    branchId?: string
   }
 
   if (!response.ok) {
@@ -106,14 +127,40 @@ async function fetchSignedUrl(signal: AbortSignal) {
     )
   }
 
-  if (!data.signedUrl) {
-    throw new ChatSessionError(
-      "Malformed response from chat service",
-      response.status
-    )
+  if (data.sessionType === "signed" && data.signedUrl) {
+    return {
+      sessionType: "signed",
+      signedUrl: data.signedUrl,
+    }
   }
 
-  return data.signedUrl
+  if (data.sessionType === "public" && data.agentId) {
+    return {
+      sessionType: "public",
+      agentId: data.agentId,
+      branchId: data.branchId,
+    }
+  }
+
+  if (data.signedUrl) {
+    return {
+      sessionType: "signed",
+      signedUrl: data.signedUrl,
+    }
+  }
+
+  if (data.agentId) {
+    return {
+      sessionType: "public",
+      agentId: data.agentId,
+      branchId: data.branchId,
+    }
+  }
+
+  throw new ChatSessionError(
+    "Malformed response from chat service",
+    response.status
+  )
 }
 
 export interface SecureConversationBarProps {
@@ -245,11 +292,34 @@ export const SecureConversationBar = React.forwardRef<
       signedUrlAbortRef.current = controller
 
       try {
-        const signedUrl = await fetchSignedUrl(controller.signal)
+        const sessionConfig = await fetchSessionConfig(controller.signal)
         if (controller.signal.aborted) return
 
+        if (sessionConfig.sessionType === "public") {
+          const trimmedBranchId = sessionConfig.branchId?.trim()
+
+          if (trimmedBranchId) {
+            await conversation.startSession({
+              signedUrl: buildWebSocketConversationUrl(
+                sessionConfig.agentId,
+                trimmedBranchId
+              ),
+              connectionType: "websocket",
+              userId,
+            })
+            return
+          }
+
+          await conversation.startSession({
+            agentId: sessionConfig.agentId,
+            connectionType: "websocket",
+            userId,
+          })
+          return
+        }
+
         await conversation.startSession({
-          signedUrl,
+          signedUrl: sessionConfig.signedUrl,
           connectionType: "websocket",
           userId,
         })

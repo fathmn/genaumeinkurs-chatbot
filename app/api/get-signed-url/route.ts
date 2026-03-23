@@ -9,7 +9,7 @@ import {
 export const dynamic = "force-dynamic"
 
 function json(
-  body: Record<string, string>,
+  body: Record<string, string | undefined>,
   init: {
     status: number
     headers?: HeadersInit
@@ -25,9 +25,13 @@ function json(
 }
 
 function getChatConfig() {
-  const apiKey = process.env.ELEVENLABS_API_KEY
-  const agentId = process.env.ELEVENLABS_AGENT_ID
-  const branchId = process.env.ELEVENLABS_BRANCH_ID
+  const apiKey = process.env.ELEVENLABS_API_KEY?.trim()
+  const agentId =
+    process.env.ELEVENLABS_AGENT_ID?.trim() ??
+    process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID?.trim()
+  const branchId =
+    process.env.ELEVENLABS_BRANCH_ID?.trim() ??
+    process.env.NEXT_PUBLIC_ELEVENLABS_BRANCH_ID?.trim()
 
   return { apiKey, agentId, branchId }
 }
@@ -74,10 +78,27 @@ export async function POST(request: NextRequest) {
 
   const { apiKey, agentId, branchId } = getChatConfig()
 
-  if (!apiKey || !agentId) {
+  if (!agentId) {
     return json(
       { error: "Chat is temporarily unavailable" },
       { status: 503 }
+    )
+  }
+
+  if (!apiKey) {
+    return json(
+      {
+        sessionType: "public",
+        agentId,
+        branchId,
+      },
+      {
+        status: 200,
+        headers: {
+          "X-RateLimit-Remaining": String(rateLimit.remaining),
+          "X-RateLimit-Reset": String(rateLimit.resetAt),
+        },
+      }
     )
   }
 
@@ -109,7 +130,7 @@ export async function POST(request: NextRequest) {
   }
 
   return json(
-    { signedUrl },
+    { sessionType: "signed", signedUrl },
     {
       status: 200,
       headers: {
